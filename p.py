@@ -74,6 +74,29 @@ def insert_data(conn, df):
         ))
     conn.commit()
 
+# Função para exibir a confirmação de exclusão
+def confirmar_exclusao(conn):
+    if 'confirm_exclusion' not in st.session_state:
+        st.session_state['confirm_exclusion'] = False
+
+    # Botão de excluir gera uma pergunta de confirmação
+    if st.button("Excluir todos os dados"):
+        st.session_state['confirm_exclusion'] = True
+
+    if st.session_state['confirm_exclusion']:
+        st.warning("Tem certeza que deseja excluir? Essa ação é irreversível!")
+        if st.button("Sim, excluir"):
+            delete_data(conn)
+            st.success("Todos os dados foram excluídos com sucesso!")
+            st.session_state['confirm_exclusion'] = False
+
+# Função para verificar duplicatas de GTAs e lacres
+def verificar_duplicatas(df):
+    gtas_duplicadas = df[df.duplicated(subset='N.º Série', keep=False)]
+    lacres_duplicados = df[df.duplicated(subset='Lacre', keep=False)]
+    
+    return gtas_duplicadas, lacres_duplicados
+
 # Main Function - Página de Carregar Dados
 def carregar_dados():
     st.title("Carregar Planilha de Dados das GTAs e Brincos")
@@ -118,11 +141,9 @@ def carregar_dados():
         st.write(f"**Total de Fêmeas: {total_femeas}**")
         st.write(f"**Total de Animais: {total_animais}**")
         
-        # Botão para excluir dados existentes
-        if st.button("Excluir todos os dados"):
-            delete_data(conn)
-            st.success("Todos os dados foram excluídos com sucesso!")
-    
+        # Chama a função que simula o modal de exclusão
+        confirmar_exclusao(conn)
+
     else:
         # Upload do arquivo
         uploaded_file = st.file_uploader("Escolha um arquivo Excel ou ODS", type=["xlsx", "xls", "ods"])
@@ -133,6 +154,22 @@ def carregar_dados():
                 df = pd.read_excel(uploaded_file)
                 st.success("Dados carregados com sucesso!")
                 st.dataframe(df)  # Exibe os dados carregados
+
+                # Verificar duplicatas
+                gtas_duplicadas, lacres_duplicados = verificar_duplicatas(df)
+
+                # Exibir informações de duplicatas
+                st.subheader("Verificação de Duplicatas")
+                st.write(f"Lacres duplicados: {len(lacres_duplicados)}")
+                st.write(f"GTAs duplicadas: {len(gtas_duplicadas)}")
+
+                if len(lacres_duplicados) > 0:
+                    st.write("**Lacres Duplicados:**")
+                    st.dataframe(lacres_duplicados)
+
+                if len(gtas_duplicadas) > 0:
+                    st.write("**GTAs Duplicadas:**")
+                    st.dataframe(gtas_duplicadas)
 
                 # Inserir dados da planilha no banco
                 if st.button("Salvar dados no banco"):
