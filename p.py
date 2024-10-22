@@ -1,4 +1,3 @@
-
 import streamlit as st
 from streamlit_option_menu import option_menu
 import pandas as pd
@@ -125,10 +124,11 @@ def carregar_dados():
         st.write(f"**Total de Fêmeas: {total_femeas}**")
         st.write(f"**Total de Animais: {total_animais}**")
         
-        # Botão para excluir dados existentes
-        if st.button("Excluir todos os dados"):
-            delete_data(conn)
-            st.success("Todos os dados foram excluídos com sucesso!")
+        # Checkbox para exibir o botão de exclusão
+        if st.checkbox("Deseja excluir todos os dados?"):
+            if st.button("Excluir todos os dados"):
+                delete_data(conn)
+                st.success("Todos os dados foram excluídos com sucesso!")
     
     else:
         # Upload do arquivo
