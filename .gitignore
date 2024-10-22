@@ -11,3 +11,4 @@ __pycache__/
 # Ignorar arquivos temporários do sistema operacional
 .DS_Store
 Thumbs.db
+
