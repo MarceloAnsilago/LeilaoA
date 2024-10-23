@@ -25,7 +25,9 @@ def create_table(conn):
         F_25_36 INTEGER,
         M_36_mais INTEGER,
         F_36_mais INTEGER,
-        lote INTEGER
+        lote INTEGER,
+        proprietario_origem TEXT,  -- Nova coluna
+        propriedade_origem TEXT    -- Nova coluna
     );
     """
     conn.execute(create_table_sql)
@@ -72,11 +74,12 @@ def verificar_duplicatas(df):
 def insert_data(conn, df):
     for _, row in df.iterrows():
         conn.execute("""
-            INSERT INTO bovinos (numero_gta, lacre, M_0_8, F_0_8, M_9_12, F_9_12, M_13_24, F_13_24, M_25_36, F_25_36, M_36_mais, F_36_mais, lote)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO bovinos (numero_gta, lacre, M_0_8, F_0_8, M_9_12, F_9_12, M_13_24, F_13_24, M_25_36, F_25_36, M_36_mais, F_36_mais, lote, proprietario_origem, propriedade_origem)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             row['N.º Série'], row['Lacre'], row['M 0 - 8'], row['F 0 - 8'], row['M 9 - 12'], row['F 9 - 12'],
-            row['M 13 - 24'], row['F 13 - 24'], row['M 25 - 36'], row['F 25 - 36'], row['M 36 +'], row['F 36 +'], row['Lotes']
+            row['M 13 - 24'], row['F 13 - 24'], row['M 25 - 36'], row['F 25 - 36'], row['M 36 +'], row['F 36 +'], row['Lotes'],
+            row['Proprietário Origem'], row['Propriedade de Origem']  # Novas colunas
         ))
     conn.commit()
 
@@ -93,7 +96,7 @@ def carregar_dados():
     if data:
         st.warning("Dados salvos no banco de dados.")
         # Convertendo os dados do banco para um DataFrame
-        df = pd.DataFrame(data, columns=['id', 'numero_gta', 'lacre', 'M_0_8', 'F_0_8', 'M_9_12', 'F_9_12', 'M_13_24', 'F_13_24', 'M_25_36', 'F_25_36', 'M_36_mais', 'F_36_mais', 'lote'])
+        df = pd.DataFrame(data, columns=['id', 'numero_gta', 'lacre', 'M_0_8', 'F_0_8', 'M_9_12', 'F_9_12', 'M_13_24', 'F_13_24', 'M_25_36', 'F_25_36', 'M_36_mais', 'F_36_mais', 'lote', 'proprietario_origem', 'propriedade_origem'])
         
         # Exibindo os dados em tabela
         st.dataframe(df)
