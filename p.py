@@ -2,6 +2,7 @@ import streamlit as st
 from streamlit_option_menu import option_menu
 import pandas as pd
 import sqlite3
+from datetime import datetime
 
 # Função para criar a conexão com o banco de dados
 def create_connection():
@@ -26,11 +27,25 @@ def create_table(conn):
         M_36_mais INTEGER,
         F_36_mais INTEGER,
         lote INTEGER,
-        proprietario_origem TEXT,  -- Nova coluna
-        propriedade_origem TEXT    -- Nova coluna
+        proprietario_origem TEXT,
+        propriedade_origem TEXT
     );
     """
     conn.execute(create_table_sql)
+
+    # Tabela de histórico de correções
+    create_history_table_sql = """
+    CREATE TABLE IF NOT EXISTS historico_correcoes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id_bovino INTEGER,
+        gta_original TEXT,
+        gta_corrigida TEXT,
+        motivo_correcao TEXT,
+        data_correcao TEXT,
+        FOREIGN KEY (id_bovino) REFERENCES bovinos(id)
+    );
+    """
+    conn.execute(create_history_table_sql)
     conn.commit()
 
 # Função para excluir todos os dados da tabela bovinos
@@ -70,6 +85,27 @@ def verificar_duplicatas(df):
     duplicatas_gta = df[df.duplicated(subset=['N.º Série'], keep=False)]
     return duplicatas_lacre, duplicatas_gta
 
+# Função para registrar uma correção no histórico
+def registrar_correcao(conn, id_bovino, gta_original, gta_corrigida, motivo):
+    data_correcao = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    conn.execute("""
+        INSERT INTO historico_correcoes (id_bovino, gta_original, gta_corrigida, motivo_correcao, data_correcao)
+        VALUES (?, ?, ?, ?, ?)
+    """, (id_bovino, gta_original, gta_corrigida, motivo, data_correcao))
+    conn.commit()
+
+# Função para realizar a correção da GTA
+def corrigir_gta(conn, id_bovino, nova_gta, motivo):
+    cursor = conn.execute("SELECT numero_gta FROM bovinos WHERE id = ?", (id_bovino,))
+    gta_original = cursor.fetchone()[0]
+    
+    # Atualiza a GTA no banco de dados
+    conn.execute("UPDATE bovinos SET numero_gta = ? WHERE id = ?", (nova_gta, id_bovino))
+    conn.commit()
+    
+    # Registrar a correção no histórico
+    registrar_correcao(conn, id_bovino, gta_original, nova_gta, motivo)
+
 # Função para inserir os dados no banco
 def insert_data(conn, df):
     for _, row in df.iterrows():
@@ -79,9 +115,35 @@ def insert_data(conn, df):
         """, (
             row['N.º Série'], row['Lacre'], row['M 0 - 8'], row['F 0 - 8'], row['M 9 - 12'], row['F 9 - 12'],
             row['M 13 - 24'], row['F 13 - 24'], row['M 25 - 36'], row['F 25 - 36'], row['M 36 +'], row['F 36 +'], row['Lotes'],
-            row['Proprietário Origem'], row['Propriedade de Origem']  # Novas colunas
+            row['Proprietário Origem'], row['Propriedade de Origem']
         ))
     conn.commit()
+
+# Função para exibir o histórico de correções
+def exibir_historico(conn):
+    query = "SELECT * FROM historico_correcoes"
+    df_historico = pd.read_sql(query, conn)
+    st.subheader("Histórico de Correções")
+    st.dataframe(df_historico)
+
+# Função para listar os bovinos e permitir correções
+def listar_bovinos_para_correcao(conn):
+    query = "SELECT * FROM bovinos"
+    df_bovinos = pd.read_sql(query, conn)
+    
+    st.subheader("Lista de Bovinos")
+    st.dataframe(df_bovinos)
+    
+    # Selecionar o bovino para corrigir
+    bovino_selecionado = st.selectbox("Selecione o bovino para corrigir", df_bovinos['id'])
+    
+    # Inserir a nova GTA e o motivo da correção
+    nova_gta = st.text_input("Nova GTA")
+    motivo_correcao = st.text_area("Motivo da correção")
+    
+    if st.button("Corrigir GTA"):
+        corrigir_gta(conn, bovino_selecionado, nova_gta, motivo_correcao)
+        st.success("GTA corrigida e registrada no histórico com sucesso!")
 
 # Main Function - Página de Carregar Dados
 def carregar_dados():
@@ -95,23 +157,19 @@ def carregar_dados():
     
     if data:
         st.warning("Dados salvos no banco de dados.")
-        # Convertendo os dados do banco para um DataFrame
         df = pd.DataFrame(data, columns=['id', 'numero_gta', 'lacre', 'M_0_8', 'F_0_8', 'M_9_12', 'F_9_12', 'M_13_24', 'F_13_24', 'M_25_36', 'F_25_36', 'M_36_mais', 'F_36_mais', 'lote', 'proprietario_origem', 'propriedade_origem'])
         
         # Exibindo os dados em tabela
         st.dataframe(df)
 
-        # Calculando os totais de cada faixa etária
         totais, total_machos, total_femeas, total_animais = calcular_totais(df)
         
-        # Exibindo os totais em uma tabela com efeito zebra
         st.subheader("Totais por Faixa Etária e Sexo")
         totais_df = pd.DataFrame.from_dict({
             "Faixa Etária": list(totais.keys()),
             "Total": list(totais.values())
         })
 
-        # Ocultar o índice e aplicar o efeito zebra nas linhas
         st.markdown("""
         <style>
         tbody tr:nth-child(even) {
@@ -120,31 +178,26 @@ def carregar_dados():
         </style>
         """, unsafe_allow_html=True)
 
-        st.table(totais_df.style.hide(axis="index"))  # Oculta o índice
+        st.table(totais_df.style.hide(axis="index"))
 
-        # Exibindo os totais de machos, fêmeas e total geral
         st.write(f"**Total de Machos: {total_machos}**")
         st.write(f"**Total de Fêmeas: {total_femeas}**")
         st.write(f"**Total de Animais: {total_animais}**")
         
-        # Checkbox para exibir o botão de exclusão
         if st.checkbox("Deseja excluir todos os dados?"):
             if st.button("Excluir todos os dados"):
                 delete_data(conn)
                 st.success("Todos os dados foram excluídos com sucesso!")
     
     else:
-        # Upload do arquivo
         uploaded_file = st.file_uploader("Escolha um arquivo Excel ou ODS", type=["xlsx", "xls", "ods"])
         
         if uploaded_file is not None:
             try:
-                # Carregar dados para um DataFrame
                 df = pd.read_excel(uploaded_file)
                 st.success("Dados carregados com sucesso!")
-                st.dataframe(df)  # Exibe os dados carregados
+                st.dataframe(df)
 
-                # Verificar duplicatas
                 duplicatas_lacre, duplicatas_gta = verificar_duplicatas(df)
                 if not duplicatas_lacre.empty or not duplicatas_gta.empty:
                     st.warning("Existem lacres ou GTAs duplicados!")
@@ -157,7 +210,6 @@ def carregar_dados():
                         st.subheader("GTAs Duplicadas")
                         st.dataframe(duplicatas_gta)
 
-                # Inserir dados da planilha no banco
                 if st.button("Salvar dados no banco"):
                     insert_data(conn, df)
                     st.success("Dados salvos no banco de dados com sucesso!")
@@ -169,12 +221,14 @@ def carregar_dados():
 def main():
     with st.sidebar:
         selected = option_menu(
-            menu_title="Menu Principal",  # título do menu
-            options=["Visualizar Lotes", "Gerar Planilha", "Carregar Dados"],  # Carregar Dados agora na última posição
-            icons=["eye", "file-earmark-excel", "upload"],  # ícones opcionais
-            menu_icon="cast",  # ícone do menu principal
-            default_index=0,  # seleciona a primeira opção ao iniciar
+            menu_title="Menu Principal",
+            options=["Visualizar Lotes", "Gerar Planilha", "Carregar Dados", "Corrigir GTA", "Exibir Histórico"],
+            icons=["eye", "file-earmark-excel", "upload", "edit", "history"],
+            menu_icon="cast",
+            default_index=0,
         )
+
+    conn = create_connection()
 
     if selected == "Carregar Dados":
         carregar_dados()
@@ -186,6 +240,12 @@ def main():
     elif selected == "Gerar Planilha":
         st.title("Gerar Planilha")
         st.write("Funcionalidade em construção.")
+    
+    elif selected == "Corrigir GTA":
+        listar_bovinos_para_correcao(conn)
+    
+    elif selected == "Exibir Histórico":
+        exibir_historico(conn)
 
 if __name__ == "__main__":
     main()
