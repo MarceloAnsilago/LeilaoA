@@ -152,81 +152,96 @@ def listar_bovinos_para_correcao(conn):
 
 
 
+
+
 def gerar_lotes(conn):
     st.title("Gerar Lotes")
 
-    # Criar as duas colunas
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        novo_lote = st.text_input("Informe o novo lote")
-    
-    with col2:
-        gerar_lote_button = st.button("Gerar Lote")
-    
-    # Manter o estado do lote informado
+    # Inicializar as variáveis de estado, se não existirem
     if 'lote_gerado' not in st.session_state:
         st.session_state['lote_gerado'] = None
     
     if 'cards' not in st.session_state:
         st.session_state['cards'] = []
 
-    # Se o botão for clicado e um lote foi informado, guarda o valor do lote
-    if gerar_lote_button and novo_lote:
-        st.session_state['lote_gerado'] = novo_lote
+    if 'mostrar_gerar_lote' not in st.session_state:
+        st.session_state['mostrar_gerar_lote'] = True
 
-    # Formulário para buscar brinco
-    with st.form(key='form_busca_brinco'):
-        st.subheader("Buscar Brinco")
-        numero_brinco = st.text_input("Informe o número do brinco")
-        buscar_brinco_button = st.form_submit_button(label="Buscar Brinco")
+    # Mostrar botão "Novo Lote" sempre
+    if st.button("Novo Lote", key="novo_lote_inicial"):
+        st.session_state['mostrar_gerar_lote'] = True
+        st.session_state['lote_gerado'] = None
+        st.session_state['cards'] = []
+
+    # Formulário para "Gerar Lote" aparece ao clicar em "Novo Lote"
+    if st.session_state['mostrar_gerar_lote']:
+        # Criar as duas colunas para gerar o lote
+        col1, col2 = st.columns([2, 1])
         
-        if buscar_brinco_button:
-            # Consultar o banco de dados para buscar o brinco
-            query = "SELECT * FROM bovinos WHERE lacre = ?"
-            cursor = conn.execute(query, (numero_brinco,))
-            bovino = cursor.fetchone()
+        with col1:
+            novo_lote = st.text_input("Informe o novo lote", key="lote_input")
+        
+        with col2:
+            gerar_lote_button = st.button("Gerar Lote", key="gerar_lote_button")
+        
+        # Se o botão for clicado e um lote foi informado, guarda o valor do lote e remove o formulário
+        if gerar_lote_button and novo_lote:
+            st.session_state['lote_gerado'] = novo_lote
+            st.session_state['mostrar_gerar_lote'] = False
+
+    # Formulário para buscar brinco sempre aparece abaixo do botão "Novo Lote" ou após gerar o lote
+    if st.session_state['lote_gerado']:
+        with st.form(key='form_busca_brinco'):
+            st.subheader("Buscar Brinco")
+            numero_brinco = st.text_input("Informe o número do brinco", key="brinco_input")
+            buscar_brinco_button = st.form_submit_button(label="Buscar Brinco")
             
-            if bovino:
-                # Identificar as faixas etárias e quantidades diferentes de 0
-                faixas_etarias = {
-                    "M 0-8": bovino[3], "F 0-8": bovino[4],
-                    "M 9-12": bovino[5], "F 9-12": bovino[6],
-                    "M 13-24": bovino[7], "F 13-24": bovino[8],
-                    "M 25-36": bovino[9], "F 25-36": bovino[10],
-                    "M 36+": bovino[11], "F 36+": bovino[12]
-                }
+            if buscar_brinco_button:
+                # Consultar o banco de dados para buscar o brinco
+                query = "SELECT * FROM bovinos WHERE lacre = ?"
+                cursor = conn.execute(query, (numero_brinco,))
+                bovino = cursor.fetchone()
                 
-                faixas_validas = {faixa: qtd for faixa, qtd in faixas_etarias.items() if qtd > 0}
+                if bovino:
+                    # Identificar as faixas etárias e quantidades diferentes de 0
+                    faixas_etarias = {
+                        "M 0-8": bovino[3], "F 0-8": bovino[4],
+                        "M 9-12": bovino[5], "F 9-12": bovino[6],
+                        "M 13-24": bovino[7], "F 13-24": bovino[8],
+                        "M 25-36": bovino[9], "F 25-36": bovino[10],
+                        "M 36+": bovino[11], "F 36+": bovino[12]
+                    }
+                    
+                    faixas_validas = {faixa: qtd for faixa, qtd in faixas_etarias.items() if qtd > 0}
 
-                # Exibir os dados do bovino encontrados
-                st.write("**Dados do Bovino Encontrado**")
-                st.write(f"**GTA:** {bovino[1]}")
-                st.write(f"**Lacre (Brinco):** {bovino[2]}")
-                st.write(f"**Faixa Etária:**")
+                    # Exibir os dados do bovino encontrados
+                    st.write("**Dados do Bovino Encontrado**")
+                    st.write(f"**GTA:** {bovino[1]}")
+                    st.write(f"**Lacre (Brinco):** {bovino[2]}")
+                    st.write(f"**Faixa Etária:**")
 
-                # Exibir cada faixa etária com quantidade diferente de zero
-                for faixa, qtd in faixas_validas.items():
-                    st.write(f"- **{faixa}:** {qtd}")
-                
-                # Exibir corretamente as colunas proprietario_origem e propriedade_origem
-                st.write(f"**Proprietário de Origem:** {bovino[14]}")
-                st.write(f"**Propriedade de Origem:** {bovino[15]}")
+                    # Exibir cada faixa etária com quantidade diferente de zero
+                    for faixa, qtd in faixas_validas.items():
+                        st.write(f"- **{faixa}:** {qtd}")
+                    
+                    # Exibir corretamente as colunas proprietario_origem e propriedade_origem
+                    st.write(f"**Proprietário de Origem:** {bovino[14]}")
+                    st.write(f"**Propriedade de Origem:** {bovino[15]}")
 
-                # Armazenar os dados encontrados no estado
-                st.session_state['bovino_atual'] = {
-                    "GTA": bovino[1],
-                    "Lacre": bovino[2],
-                    "Proprietário": bovino[14],
-                    "Propriedade": bovino[15],
-                    "Faixas": faixas_validas
-                }
-            else:
-                st.error("Brinco não encontrado no banco de dados.")
+                    # Armazenar os dados encontrados no estado
+                    st.session_state['bovino_atual'] = {
+                        "GTA": bovino[1],
+                        "Lacre": bovino[2],
+                        "Proprietário": bovino[14],
+                        "Propriedade": bovino[15],
+                        "Faixas": faixas_validas
+                    }
+                else:
+                    st.error("Brinco não encontrado no banco de dados.")
 
     # Mostrar o botão de "Inserir Lote" somente após os dados terem sido encontrados
     if 'bovino_atual' in st.session_state:
-        if st.button("Inserir Lote"):
+        if st.button("Inserir Lote", key="inserir_lote_button"):
             # Adicionar os dados do bovino atual ao quadro de lote
             st.session_state['cards'].append(st.session_state['bovino_atual'])
             st.success("GTA inserido no lote com sucesso!")
@@ -234,14 +249,14 @@ def gerar_lotes(conn):
             # Remover o bovino atual do estado para evitar duplicações
             del st.session_state['bovino_atual']
 
-    # Exibir o lote gerado e os bovinos adicionados
-    if st.session_state['lote_gerado']:
+    # Exibir os bovinos adicionados ao lote
+    if st.session_state['lote_gerado'] and st.session_state['cards']:
+        # Mover o lote gerado para baixo do botão "Inserir Lote"
         st.markdown(f"""
             <h4 style="color: #4CAF50;">Lote Gerado: {st.session_state['lote_gerado']}</h4>
         """, unsafe_allow_html=True)
 
-        if st.session_state['cards']:
-            st.markdown(f"<h5>Resumo: {len(st.session_state['cards'])} bovinos adicionados ao lote.</h5>", unsafe_allow_html=True)
+        st.markdown(f"<h5>Resumo: {len(st.session_state['cards'])} bovinos adicionados ao lote.</h5>", unsafe_allow_html=True)
 
         for card in st.session_state['cards']:
             faixas_str = ", ".join([f"{faixa}: {qtd}" for faixa, qtd in card['Faixas'].items()])
@@ -255,10 +270,6 @@ def gerar_lotes(conn):
                     <p><strong>Faixas Etárias:</strong> {faixas_str}</p>
                 </div>
             """, unsafe_allow_html=True)
-
-
-
-
 
 
 
